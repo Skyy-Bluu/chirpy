@@ -1,6 +1,14 @@
 package main
 
 import (
+	"database/sql"
+	"os"
+
+	database "github.com/Skyy-Bluu/chirpy/internal/database"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +28,7 @@ var profaneWords = []string{
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	db             *database.Queries
 }
 
 type chirp struct {
@@ -125,8 +134,17 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	apiConfig := apiConfig{
 		fileserverHits: atomic.Int32{},
+		db:             database.New(db),
 	}
 	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir("./")))
