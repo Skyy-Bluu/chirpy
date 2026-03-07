@@ -43,6 +43,17 @@ type cleanedChirp struct {
 	CleanedBody string `json:"cleaned_body"`
 }
 
+type email struct {
+	Value string `json:"email"`
+}
+
+type emailReponse struct {
+	ID        string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	Email     string `json:"email"`
+}
+
 func (cfg *apiConfig) middlewareIncrementServerHits(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, req *http.Request) {
 		cfg.fileserverHits.Add(1)
@@ -68,6 +79,42 @@ func (cfg *apiConfig) showMetricsHandler(w http.ResponseWriter, req *http.Reques
 func (cfg *apiConfig) resetHitsMetricHandler(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	cfg.fileserverHits.Store(0)
+}
+
+func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
+	decoder := json.NewDecoder(req.Body)
+	email := email{}
+	emailResp := emailReponse{}
+	if err := decoder.Decode(&email); err != nil {
+		log.Printf("Error decoding JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	usr, err := cfg.db.CreateUser(req.Context(), email.Value)
+
+	emailResp.ID = usr.ID.String()
+	emailResp.CreatedAt = usr.CreatedAt.String()
+	emailResp.UpdatedAt = usr.UpdatedAt.String()
+	emailResp.Email = usr.Email
+
+	if err != nil {
+		log.Printf("Error creating user: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	dat, err := json.Marshal(emailResp)
+
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", applicationJsonContentType)
+	w.WriteHeader(http.StatusCreated)
+	w.Write(dat)
 }
 
 func healthzHandler(w http.ResponseWriter, req *http.Request) {
@@ -146,6 +193,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db:             database.New(db),
 	}
+
 	mux := http.NewServeMux()
 	appHandler := http.StripPrefix("/app", http.FileServer(http.Dir("./")))
 	mux.Handle("/app/", apiConfig.middlewareIncrementServerHits(appHandler))
@@ -154,6 +202,7 @@ func main() {
 	mux.HandleFunc("GET /admin/metrics", apiConfig.showMetricsHandler)
 	mux.HandleFunc("POST /admin/reset", apiConfig.resetHitsMetricHandler)
 	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("POST /api/users", apiConfig.createUserHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
