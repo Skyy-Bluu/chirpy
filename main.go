@@ -139,6 +139,37 @@ func (cfg *apiConfig) resetDBHandler(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request) {
+	dbChirps, err := cfg.db.GetChirps(req.Context())
+
+	if err != nil {
+		log.Printf("Error retrieving chirps: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	chirps := []dbChirp{}
+
+	for _, chirp := range dbChirps {
+		chirps = append(chirps, dbChirp{
+			ID:        chirp.ID.String(),
+			CreatedAt: chirp.CreatedAt.String(),
+			UpdatedAt: chirp.UpdatedAt.String(),
+			Body:      chirp.Body,
+			UserID:    chirp.UserID.String(),
+		})
+	}
+	dat, err := json.Marshal(chirps)
+
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(dat)
+}
+
 func healthzHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", plainTextContentType)
 	w.WriteHeader(http.StatusOK)
@@ -255,6 +286,7 @@ func main() {
 	mux.HandleFunc("POST /api/chirps", apiConfig.chirpHandler)
 	mux.HandleFunc("POST /api/users", apiConfig.createUserHandler)
 	mux.HandleFunc("POST /admin/reset", apiConfig.resetDBHandler)
+	mux.HandleFunc("GET /api/chirps", apiConfig.getChirpsHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
