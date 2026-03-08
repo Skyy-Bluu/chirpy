@@ -5,6 +5,7 @@ import (
 	"os"
 
 	database "github.com/Skyy-Bluu/chirpy/internal/database"
+	"github.com/google/uuid"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -33,15 +34,20 @@ type apiConfig struct {
 }
 
 type chirp struct {
-	Body string `json:"body"`
+	Body   string `json:"body"`
+	UserID string `json:"user_id"`
+}
+
+type dbChirp struct {
+	ID        string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	Body      string `json:"body"`
+	UserID    string `json:"user_id"`
 }
 
 type errorResponse struct {
 	Value string `json:"error"`
-}
-
-type cleanedChirp struct {
-	CleanedBody string `json:"cleaned_body"`
 }
 
 type email struct {
@@ -139,18 +145,17 @@ func healthzHandler(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, "OK")
 }
 
-func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	w.Header().Set("Content-Type", applicationJsonContentType)
 
 	chirp := chirp{}
-	error := errorResponse{}
-	cleanedChirp := cleanedChirp{}
+	errorResp := errorResponse{}
 
 	if err := decoder.Decode(&chirp); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		error.Value = "Something went wrong"
-		dat, err := json.Marshal(error)
+		errorResp.Value = "Something went wrong"
+		dat, err := json.Marshal(errorResp)
 		if err != nil {
 			log.Printf("Error marshalling JSON: %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -162,8 +167,8 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 
 	if len(chirp.Body) > 140 {
 		w.WriteHeader(http.StatusBadRequest)
-		error.Value = "Chirp is too long"
-		dat, err := json.Marshal(error)
+		errorResp.Value = "Chirp is too long"
+		dat, err := json.Marshal(errorResp)
 		if err != nil {
 			log.Printf("Error marshalling JSON: %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -184,15 +189,43 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	cleanedString := strings.Join(chirpSlice, " ")
-	w.WriteHeader(http.StatusOK)
-	cleanedChirp.CleanedBody = cleanedString
-	dat, err := json.Marshal(cleanedChirp)
+
+	chirpUUID, err := uuid.Parse(chirp.UserID)
+
+	if err != nil {
+		log.Printf("Invalid user_id: %s", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	chirpArgs := database.CreateChirpParams{
+		Body:   cleanedString,
+		UserID: chirpUUID,
+	}
+
+	createdChirp, err := cfg.db.CreateChirp(req.Context(), chirpArgs)
+
+	if err != nil {
+		log.Printf("Internal DB Error creating chirp %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	dbChirp := dbChirp{
+		ID:        createdChirp.ID.String(),
+		CreatedAt: createdChirp.CreatedAt.String(),
+		UpdatedAt: createdChirp.UpdatedAt.String(),
+		Body:      createdChirp.Body,
+		UserID:    createdChirp.UserID.String(),
+	}
+
+	dat, err := json.Marshal(dbChirp)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
+	w.WriteHeader(http.StatusCreated)
 	w.Write(dat)
 }
 
@@ -219,7 +252,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", healthzHandler)
 	mux.HandleFunc("GET /admin/metrics", apiConfig.showMetricsHandler)
 	mux.HandleFunc("POST /admin/reset_metrics", apiConfig.resetHitsMetricHandler)
-	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("POST /api/chirps", apiConfig.chirpHandler)
 	mux.HandleFunc("POST /api/users", apiConfig.createUserHandler)
 	mux.HandleFunc("POST /admin/reset", apiConfig.resetDBHandler)
 

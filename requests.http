@@ -1,27 +1,30 @@
-POST http://localhost:8080/api/validate_chirp HTTP/1.1
+POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
 
 {
-    "body": "Hello there"
+    "body": "Hello there",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000"
 }
 
 ###
 
-POST http://localhost:8080/api/validate_chirp HTTP/1.1
+POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
 
 {
-    "body": "Hello there Hello thereHello thereHello therevHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello there"
+    "body": "Hello there Hello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello there",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000"
 }
 
 ###
 
-POST http://localhost:8080/api/validate_chirp HTTP/1.1
+POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
 
 {
   "body": "I hear Mastodon is better than Chirpy. sharbert I need to migrate",
-  "extra": "this should be ignored"
+  "extra": "this should be ignored",
+  "user_id": "123e4567-e89b-12d3-a456-426614174000"
 }
 
 ###
