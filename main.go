@@ -29,6 +29,7 @@ var profaneWords = []string{
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
+	platform       string
 }
 
 type chirp struct {
@@ -47,7 +48,7 @@ type email struct {
 	Value string `json:"email"`
 }
 
-type emailReponse struct {
+type user struct {
 	ID        string `json:"id"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -84,7 +85,7 @@ func (cfg *apiConfig) resetHitsMetricHandler(w http.ResponseWriter, req *http.Re
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
 	email := email{}
-	emailResp := emailReponse{}
+	emailResp := user{}
 	if err := decoder.Decode(&email); err != nil {
 		log.Printf("Error decoding JSON: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -115,6 +116,21 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 	w.Header().Set("Content-Type", applicationJsonContentType)
 	w.WriteHeader(http.StatusCreated)
 	w.Write(dat)
+}
+
+func (cfg *apiConfig) resetDBHandler(w http.ResponseWriter, req *http.Request) {
+	if cfg.platform != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	if err := cfg.db.DeleteUsers(req.Context()); err != nil {
+		log.Printf("Error deleting users: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func healthzHandler(w http.ResponseWriter, req *http.Request) {
@@ -183,6 +199,7 @@ func validateChirpHandler(w http.ResponseWriter, req *http.Request) {
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
 	db, err := sql.Open("postgres", dbURL)
 
 	if err != nil {
@@ -192,6 +209,7 @@ func main() {
 	apiConfig := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db:             database.New(db),
+		platform:       platform,
 	}
 
 	mux := http.NewServeMux()
@@ -200,9 +218,10 @@ func main() {
 	mux.Handle("/assets/logo.png", http.FileServer(http.Dir(".")))
 	mux.HandleFunc("GET /api/healthz", healthzHandler)
 	mux.HandleFunc("GET /admin/metrics", apiConfig.showMetricsHandler)
-	mux.HandleFunc("POST /admin/reset", apiConfig.resetHitsMetricHandler)
+	mux.HandleFunc("POST /admin/reset_metrics", apiConfig.resetHitsMetricHandler)
 	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
 	mux.HandleFunc("POST /api/users", apiConfig.createUserHandler)
+	mux.HandleFunc("POST /admin/reset", apiConfig.resetDBHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
