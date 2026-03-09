@@ -22,6 +22,7 @@ import (
 const plainTextContentType = "text/plain; charset=utf-8"
 const htmlTextContentType = "text/html"
 const applicationJsonContentType = "application/json"
+const chirpID = "chirpID"
 
 var profaneWords = []string{
 	"kerfuffle", "sharbert", "fornax",
@@ -159,6 +160,7 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request)
 			UserID:    chirp.UserID.String(),
 		})
 	}
+
 	dat, err := json.Marshal(chirps)
 
 	if err != nil {
@@ -166,6 +168,47 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(dat)
+}
+
+func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, req *http.Request) {
+	id := req.PathValue(chirpID)
+	if id == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	chirpUUID, err := uuid.Parse(id)
+
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	chirp, err := cfg.db.GetChirp(req.Context(), chirpUUID)
+
+	if err != nil {
+		log.Printf("Error retrieving chirp: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	dbChirp := dbChirp{
+		ID:        chirp.ID.String(),
+		CreatedAt: chirp.CreatedAt.String(),
+		UpdatedAt: chirp.UpdatedAt.String(),
+		Body:      chirp.Body,
+		UserID:    chirp.UserID.String(),
+	}
+
+	dat, err := json.Marshal(dbChirp)
+
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write(dat)
 }
@@ -287,6 +330,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiConfig.createUserHandler)
 	mux.HandleFunc("POST /admin/reset", apiConfig.resetDBHandler)
 	mux.HandleFunc("GET /api/chirps", apiConfig.getChirpsHandler)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiConfig.getChirpHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
