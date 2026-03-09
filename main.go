@@ -4,7 +4,8 @@ import (
 	"database/sql"
 	"os"
 
-	database "github.com/Skyy-Bluu/chirpy/internal/database"
+	"github.com/Skyy-Bluu/chirpy/internal/auth"
+	"github.com/Skyy-Bluu/chirpy/internal/database"
 	"github.com/google/uuid"
 
 	"github.com/joho/godotenv"
@@ -51,11 +52,12 @@ type errorResponse struct {
 	Value string `json:"error"`
 }
 
-type email struct {
-	Value string `json:"email"`
+type user struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
-type user struct {
+type dbUser struct {
 	ID        string `json:"id"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -91,20 +93,33 @@ func (cfg *apiConfig) resetHitsMetricHandler(w http.ResponseWriter, req *http.Re
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
 	decoder := json.NewDecoder(req.Body)
-	email := email{}
-	emailResp := user{}
-	if err := decoder.Decode(&email); err != nil {
+	user := user{}
+	dbUser := dbUser{}
+	if err := decoder.Decode(&user); err != nil {
 		log.Printf("Error decoding JSON: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	usr, err := cfg.db.CreateUser(req.Context(), email.Value)
+	hashedPassword, err := auth.HashPassword(user.Password)
 
-	emailResp.ID = usr.ID.String()
-	emailResp.CreatedAt = usr.CreatedAt.String()
-	emailResp.UpdatedAt = usr.UpdatedAt.String()
-	emailResp.Email = usr.Email
+	if err != nil {
+		log.Printf("Error hashing password")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	createUserArgs := database.CreateUserParams{
+		Email:          user.Email,
+		HashedPassword: hashedPassword,
+	}
+
+	usr, err := cfg.db.CreateUser(req.Context(), createUserArgs)
+
+	dbUser.ID = usr.ID.String()
+	dbUser.CreatedAt = usr.CreatedAt.String()
+	dbUser.UpdatedAt = usr.UpdatedAt.String()
+	dbUser.Email = usr.Email
 
 	if err != nil {
 		log.Printf("Error creating user: %s", err)
@@ -112,7 +127,7 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	dat, err := json.Marshal(emailResp)
+	dat, err := json.Marshal(dbUser)
 
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
