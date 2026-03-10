@@ -24,6 +24,7 @@ const plainTextContentType = "text/plain; charset=utf-8"
 const htmlTextContentType = "text/html"
 const applicationJsonContentType = "application/json"
 const chirpID = "chirpID"
+const incorrectEmailOrPassword = "Incorrect email or password"
 
 var profaneWords = []string{
 	"kerfuffle", "sharbert", "fornax",
@@ -116,16 +117,16 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 
 	usr, err := cfg.db.CreateUser(req.Context(), createUserArgs)
 
-	dbUser.ID = usr.ID.String()
-	dbUser.CreatedAt = usr.CreatedAt.String()
-	dbUser.UpdatedAt = usr.UpdatedAt.String()
-	dbUser.Email = usr.Email
-
 	if err != nil {
 		log.Printf("Error creating user: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	dbUser.ID = usr.ID.String()
+	dbUser.CreatedAt = usr.CreatedAt.String()
+	dbUser.UpdatedAt = usr.UpdatedAt.String()
+	dbUser.Email = usr.Email
 
 	dat, err := json.Marshal(dbUser)
 
@@ -224,6 +225,57 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
+	w.Write(dat)
+}
+
+func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, req *http.Request) {
+	decoder := json.NewDecoder(req.Body)
+	user := user{}
+	dbUser := dbUser{}
+	if err := decoder.Decode(&user); err != nil {
+		log.Printf("Error decoding JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	usr, err := cfg.db.GetUserByEmail(req.Context(), user.Email)
+
+	if err != nil {
+		log.Printf("Error getting user from DB: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	passwordMatch, err := auth.CheckPasswordHash(user.Password, usr.HashedPassword)
+
+	if err != nil {
+		log.Printf("Error checking password hash: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if !passwordMatch {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Header().Set("Conten-Type", plainTextContentType)
+		io.WriteString(w, incorrectEmailOrPassword)
+		return
+	}
+
+	dbUser.ID = usr.ID.String()
+	dbUser.CreatedAt = usr.CreatedAt.String()
+	dbUser.UpdatedAt = usr.UpdatedAt.String()
+	dbUser.Email = usr.Email
+
+	dat, err := json.Marshal(dbUser)
+
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", applicationJsonContentType)
 	w.WriteHeader(http.StatusOK)
 	w.Write(dat)
 }
@@ -346,6 +398,7 @@ func main() {
 	mux.HandleFunc("POST /admin/reset", apiConfig.resetDBHandler)
 	mux.HandleFunc("GET /api/chirps", apiConfig.getChirpsHandler)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiConfig.getChirpHandler)
+	mux.HandleFunc("POST /api/login", apiConfig.userLoginHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
