@@ -47,7 +47,8 @@ POST http://localhost:8080/api/login HTTP/1.1
 
 {
     "email": "mloneusk@example.co",
-    "password": "Password123$"
+    "password": "Password123$",
+    "expires_in_seconds": 60
 }
 
 ###

@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"os"
+	"time"
 
 	"github.com/Skyy-Bluu/chirpy/internal/auth"
 	"github.com/Skyy-Bluu/chirpy/internal/database"
@@ -34,11 +35,11 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform       string
+	secretKey      string
 }
 
 type chirp struct {
-	Body   string `json:"body"`
-	UserID string `json:"user_id"`
+	Body string `json:"body"`
 }
 
 type dbChirp struct {
@@ -54,8 +55,9 @@ type errorResponse struct {
 }
 
 type user struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 type dbUser struct {
@@ -63,6 +65,7 @@ type dbUser struct {
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 	Email     string `json:"email"`
+	Token     string `json:"token"`
 }
 
 func (cfg *apiConfig) middlewareIncrementServerHits(next http.Handler) http.Handler {
@@ -262,10 +265,25 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	expiresIN := time.Duration(user.ExpiresInSeconds) * time.Second
+
+	if user.ExpiresInSeconds == 0 || expiresIN.Seconds() > time.Hour.Seconds() {
+		expiresIN = time.Hour
+	}
+
+	token, err := auth.MakeJWT(usr.ID, cfg.secretKey, expiresIN)
+
+	if err != nil {
+		log.Printf("Error creating JWT: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	dbUser.ID = usr.ID.String()
 	dbUser.CreatedAt = usr.CreatedAt.String()
 	dbUser.UpdatedAt = usr.UpdatedAt.String()
 	dbUser.Email = usr.Email
+	dbUser.Token = token
 
 	dat, err := json.Marshal(dbUser)
 
@@ -306,6 +324,20 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	token, err := auth.GetBearerToken(req.Header)
+
+	if err != nil {
+		log.Printf("Error retrieving token: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secretKey)
+
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+
 	if len(chirp.Body) > 140 {
 		w.WriteHeader(http.StatusBadRequest)
 		errorResp.Value = "Chirp is too long"
@@ -331,17 +363,9 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, req *http.Request) {
 
 	cleanedString := strings.Join(chirpSlice, " ")
 
-	chirpUUID, err := uuid.Parse(chirp.UserID)
-
-	if err != nil {
-		log.Printf("Invalid user_id: %s", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
 	chirpArgs := database.CreateChirpParams{
 		Body:   cleanedString,
-		UserID: chirpUUID,
+		UserID: userID,
 	}
 
 	createdChirp, err := cfg.db.CreateChirp(req.Context(), chirpArgs)
@@ -374,6 +398,8 @@ func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
+	secretKey := os.Getenv("SECRET-KEY")
+
 	db, err := sql.Open("postgres", dbURL)
 
 	if err != nil {
@@ -384,6 +410,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db:             database.New(db),
 		platform:       platform,
+		secretKey:      secretKey,
 	}
 
 	mux := http.NewServeMux()
