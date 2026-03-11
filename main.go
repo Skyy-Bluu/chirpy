@@ -318,7 +318,6 @@ func (cfg *apiConfig) refreshTokenHandler(w http.ResponseWriter, req *http.Reque
 	refreshToken, err := auth.GetBearerToken(req.Header)
 
 	if err != nil {
-		fmt.Println("DEBUG1")
 		log.Printf("Error retrieving  refresh token: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -327,7 +326,6 @@ func (cfg *apiConfig) refreshTokenHandler(w http.ResponseWriter, req *http.Reque
 	tokenParams, err := cfg.db.GetRefreshToken(req.Context(), refreshToken)
 
 	if err != nil {
-		fmt.Println("DEBUG2")
 		log.Printf("Error retrieving  refresh token from DB: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -363,6 +361,24 @@ func (cfg *apiConfig) refreshTokenHandler(w http.ResponseWriter, req *http.Reque
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(dat)
+}
+
+func (cfg *apiConfig) revokeRefreshTokenHandler(w http.ResponseWriter, req *http.Request) {
+	refreshToken, err := auth.GetBearerToken(req.Header)
+
+	if err != nil {
+		log.Printf("Error retrieving  refresh token: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if err = cfg.db.RevokeRefreshToken(req.Context(), refreshToken); err != nil {
+		log.Printf("Error updating refresh token DB entry: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func healthzHandler(w http.ResponseWriter, req *http.Request) {
@@ -494,6 +510,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiConfig.getChirpHandler)
 	mux.HandleFunc("POST /api/login", apiConfig.userLoginHandler)
 	mux.HandleFunc("POST /api/refresh", apiConfig.refreshTokenHandler)
+	mux.HandleFunc("POST /api/revoke", apiConfig.revokeRefreshTokenHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
