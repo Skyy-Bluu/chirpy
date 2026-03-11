@@ -9,3 +9,7 @@ VALUES (
     $3
 )
 RETURNING *;
+
+-- name: GetRefreshToken :one 
+SELECT expires_at, revoked_at, user_id FROM refresh_tokens
+WHERE token = $1;

@@ -1,19 +1,20 @@
 POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHktYWNjZXNzIiwic3ViIjoiZTAyYTE3YjAtY2Y3Yi00ZmJhLWIwMzQtOTc0NWEzYWMxODM4IiwiZXhwIjoxNzczMjQ0MjExLCJpYXQiOjE3NzMyNDA2MTF9.74_g3VAMTdHOsyNyzIqfusKDd5VWxUOMUvwykTRul8Y
+
 
 {
-    "body": "Hello there",
-    "user_id": "123e4567-e89b-12d3-a456-426614174000"
+    "body": "Hello there"
 }
 
 ###
 
 POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHktYWNjZXNzIiwic3ViIjoiZTAyYTE3YjAtY2Y3Yi00ZmJhLWIwMzQtOTc0NWEzYWMxODM4IiwiZXhwIjoxNzczMjQ0MjExLCJpYXQiOjE3NzMyNDA2MTF9.74_g3VAMTdHOsyNyzIqfusKDd5VWxUOMUvwykTRul8Y
 
 {
-    "body": "Hello there Hello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello there",
-    "user_id": "123e4567-e89b-12d3-a456-426614174000"
+    "body": "Hello there Hello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello there"
 }
 
 ###
@@ -47,8 +48,7 @@ POST http://localhost:8080/api/login HTTP/1.1
 
 {
     "email": "mloneusk@example.co",
-    "password": "Password123$",
-    "expires_in_seconds": 60
+    "password": "Password123$"
 }
 
 ###
@@ -58,3 +58,6 @@ POST http://localhost:8080/admin/reset HTTP/1.1
 GET http://localhost:8080/api/chirps HTTP/1.1
 
 ###
+
+POST http://localhost:8080/api/refresh HTTP/1.1
+Authorization: Bearer 
