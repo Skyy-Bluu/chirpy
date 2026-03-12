@@ -38,7 +38,7 @@ POST http://localhost:8080/api/users HTTP/1.1
 content-type: application/json
 
 {
-    "email": "mloneusk@example.co",
+    "email": "test@example.co",
     "password": "Password123$"
 }
 
@@ -47,7 +47,7 @@ content-type: application/json
 POST http://localhost:8080/api/login HTTP/1.1
 
 {
-    "email": "mloneusk@example.co",
+    "email": "test@example.co",
     "password": "Password123$"
 }
 
@@ -61,3 +61,15 @@ GET http://localhost:8080/api/chirps HTTP/1.1
 
 POST http://localhost:8080/api/refresh HTTP/1.1
 Authorization: Bearer 
+
+###
+
+PUT http://localhost:8080/api/refresh HTTP/1.1
+Authorization: Bearer 
+
+{
+    "email": "new@example.co",
+    "password": "NewPassword123$"
+}
+
+###

@@ -65,8 +65,8 @@ type dbUser struct {
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 	Email        string `json:"email"`
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
+	Token        string `json:"token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type refreshTokenResp struct {
@@ -101,9 +101,9 @@ func (cfg *apiConfig) resetHitsMetricHandler(w http.ResponseWriter, req *http.Re
 }
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
-	decoder := json.NewDecoder(req.Body)
 	user := user{}
 	dbUser := dbUser{}
+	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&user); err != nil {
 		log.Printf("Error decoding JSON: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -418,6 +418,7 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, req *http.Request) {
 	userID, err := auth.ValidateJWT(token, cfg.secretKey)
 
 	if err != nil {
+		log.Printf("Error validating user token: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
@@ -477,6 +478,73 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, req *http.Request) {
 	w.Write(dat)
 }
 
+func (cfg *apiConfig) updateEmailAndPasswordHandler(w http.ResponseWriter, req *http.Request) {
+	token, err := auth.GetBearerToken(req.Header)
+
+	if err != nil {
+		log.Printf("Error retrieving token: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secretKey)
+
+	if err != nil {
+		log.Printf("Error validating user token: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+
+	usr := user{}
+
+	decoder := json.NewDecoder(req.Body)
+	if err := decoder.Decode(&usr); err != nil {
+		log.Printf("Error decoding JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(usr.Password)
+
+	if err != nil {
+		log.Printf("Error hashing password")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	updateUserEmailAndPasswordArgs := database.UpdateUserEmailAndPasswordParams{
+		ID:             userID,
+		Email:          usr.Email,
+		HashedPassword: hashedPassword,
+	}
+
+	if err = cfg.db.UpdateUserEmailAndPassword(req.Context(), updateUserEmailAndPasswordArgs); err != nil {
+		log.Printf("Error updating db entry for user %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	fetchedUser, err := cfg.db.GetUserByEmail(req.Context(), usr.Email)
+
+	dbUser := dbUser{}
+
+	dbUser.ID = fetchedUser.ID.String()
+	dbUser.Email = fetchedUser.Email
+	dbUser.CreatedAt = fetchedUser.CreatedAt.String()
+	dbUser.UpdatedAt = fetchedUser.UpdatedAt.String()
+
+	dat, err := json.Marshal(dbUser)
+
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", applicationJsonContentType)
+	w.WriteHeader(http.StatusOK)
+	w.Write(dat)
+}
+
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
@@ -511,6 +579,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiConfig.userLoginHandler)
 	mux.HandleFunc("POST /api/refresh", apiConfig.refreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", apiConfig.revokeRefreshTokenHandler)
+	mux.HandleFunc("PUT /api/users", apiConfig.updateEmailAndPasswordHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
