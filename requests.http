@@ -73,3 +73,8 @@ Authorization: Bearer
 }
 
 ###
+
+DELETE  http://localhost:8080/api/chirps/{chirpID} HTTP/1.1
+Authorization: Bearer 
+
+###

@@ -545,6 +545,57 @@ func (cfg *apiConfig) updateEmailAndPasswordHandler(w http.ResponseWriter, req *
 	w.Write(dat)
 }
 
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, req *http.Request) {
+	token, err := auth.GetBearerToken(req.Header)
+
+	if err != nil {
+		log.Printf("Error retrieving token: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secretKey)
+
+	if err != nil {
+		log.Printf("Error validating user token: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+
+	id := req.PathValue(chirpID)
+	if id == "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	chirpUUID, err := uuid.Parse(id)
+
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	chirp, err := cfg.db.GetChirp(req.Context(), chirpUUID)
+
+	if err != nil {
+		log.Printf("Error retrieving chirp: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if chirp.UserID != userID {
+		log.Printf("Unathorized user, chirp belongs to a different user")
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	if err = cfg.db.DeleteChirp(req.Context(), chirp.ID); err != nil {
+		log.Printf("Error deleting chirp from DB %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func main() {
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
@@ -580,6 +631,7 @@ func main() {
 	mux.HandleFunc("POST /api/refresh", apiConfig.refreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", apiConfig.revokeRefreshTokenHandler)
 	mux.HandleFunc("PUT /api/users", apiConfig.updateEmailAndPasswordHandler)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiConfig.deleteChirpHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
