@@ -27,6 +27,7 @@ const applicationJsonContentType = "application/json"
 const chirpID = "chirpID"
 const incorrectEmailOrPassword = "Incorrect email or password"
 const sixtyDaysDuration = time.Hour * 24 * 60
+const polkaEventUpgradedUser = "user.upgraded"
 
 var profaneWords = []string{
 	"kerfuffle", "sharbert", "fornax",
@@ -65,12 +66,22 @@ type dbUser struct {
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 	Email        string `json:"email"`
+	IsChirpyRed  bool   `json:"is_chirpy_red"`
 	Token        string `json:"token,omitempty"`
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type refreshTokenResp struct {
 	Token string `json:"token"`
+}
+
+type polkaWebhook struct {
+	Event string `json:"event"`
+	Data  data   `json:"data"`
+}
+
+type data struct {
+	UserID string `json:"user_id"`
 }
 
 func (cfg *apiConfig) middlewareIncrementServerHits(next http.Handler) http.Handler {
@@ -135,6 +146,7 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 	dbUser.CreatedAt = usr.CreatedAt.String()
 	dbUser.UpdatedAt = usr.UpdatedAt.String()
 	dbUser.Email = usr.Email
+	dbUser.IsChirpyRed = usr.IsChirpyRed
 
 	dat, err := json.Marshal(dbUser)
 
@@ -206,6 +218,7 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, req *http.Request) 
 	chirpUUID, err := uuid.Parse(id)
 
 	if err != nil {
+		log.Printf("Error parsing user ID: %s", err)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -298,6 +311,7 @@ func (cfg *apiConfig) userLoginHandler(w http.ResponseWriter, req *http.Request)
 	dbUser.CreatedAt = usr.CreatedAt.String()
 	dbUser.UpdatedAt = usr.UpdatedAt.String()
 	dbUser.Email = usr.Email
+	dbUser.IsChirpyRed = usr.IsChirpyRed
 	dbUser.Token = jwt
 	dbUser.RefreshToken = refreshToken
 
@@ -531,6 +545,7 @@ func (cfg *apiConfig) updateEmailAndPasswordHandler(w http.ResponseWriter, req *
 	dbUser.Email = fetchedUser.Email
 	dbUser.CreatedAt = fetchedUser.CreatedAt.String()
 	dbUser.UpdatedAt = fetchedUser.UpdatedAt.String()
+	dbUser.IsChirpyRed = fetchedUser.IsChirpyRed
 
 	dat, err := json.Marshal(dbUser)
 
@@ -570,6 +585,7 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, req *http.Reques
 	chirpUUID, err := uuid.Parse(id)
 
 	if err != nil {
+		log.Printf("Error parsing user ID: %s", err)
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -594,6 +610,39 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, req *http.Reques
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (cfg *apiConfig) polkaWebhookHandler(w http.ResponseWriter, req *http.Request) {
+	polkaWebhookBody := polkaWebhook{}
+
+	decoder := json.NewDecoder(req.Body)
+
+	if err := decoder.Decode(&polkaWebhookBody); err != nil {
+		log.Printf("Error decoding JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if polkaWebhookBody.Event != polkaEventUpgradedUser {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	userID, err := uuid.Parse(polkaWebhookBody.Data.UserID)
+
+	if err != nil {
+		log.Printf("Error parsing user ID: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if err = cfg.db.UpgradeUserToChirpyRed(req.Context(), userID); err != nil {
+		log.Printf("Error upgrading user to chipry red: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", applicationJsonContentType)
 }
 
 func main() {
@@ -632,6 +681,8 @@ func main() {
 	mux.HandleFunc("POST /api/revoke", apiConfig.revokeRefreshTokenHandler)
 	mux.HandleFunc("PUT /api/users", apiConfig.updateEmailAndPasswordHandler)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiConfig.deleteChirpHandler)
+
+	mux.HandleFunc("POST /api/polka/webhooks", apiConfig.polkaWebhookHandler)
 
 	httpServer := http.Server{
 		Handler: mux,
