@@ -38,6 +38,7 @@ type apiConfig struct {
 	db             *database.Queries
 	platform       string
 	secretKey      string
+	polkaKey       string
 }
 
 type chirp struct {
@@ -613,6 +614,20 @@ func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (cfg *apiConfig) polkaWebhookHandler(w http.ResponseWriter, req *http.Request) {
+	apiKey, err := auth.GetAPIKey(req.Header)
+
+	if err != nil {
+		log.Printf("Error retrieving  API Key: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if apiKey != cfg.polkaKey {
+		log.Println("API key mismatch")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	polkaWebhookBody := polkaWebhook{}
 
 	decoder := json.NewDecoder(req.Body)
@@ -650,6 +665,7 @@ func main() {
 	dbURL := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
 	secretKey := os.Getenv("SECRET-KEY")
+	polkaKey := os.Getenv("POLKA_KEY")
 
 	db, err := sql.Open("postgres", dbURL)
 
@@ -662,6 +678,7 @@ func main() {
 		db:             database.New(db),
 		platform:       platform,
 		secretKey:      secretKey,
+		polkaKey:       polkaKey,
 	}
 
 	mux := http.NewServeMux()

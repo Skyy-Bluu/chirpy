@@ -1,6 +1,6 @@
 POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHktYWNjZXNzIiwic3ViIjoiZTAyYTE3YjAtY2Y3Yi00ZmJhLWIwMzQtOTc0NWEzYWMxODM4IiwiZXhwIjoxNzczMjQ0MjExLCJpYXQiOjE3NzMyNDA2MTF9.74_g3VAMTdHOsyNyzIqfusKDd5VWxUOMUvwykTRul8Y
+Authorization: Bearer ${JWT}
 
 
 {
@@ -11,7 +11,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHktY
 
 POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHktYWNjZXNzIiwic3ViIjoiZTAyYTE3YjAtY2Y3Yi00ZmJhLWIwMzQtOTc0NWEzYWMxODM4IiwiZXhwIjoxNzczMjQ0MjExLCJpYXQiOjE3NzMyNDA2MTF9.74_g3VAMTdHOsyNyzIqfusKDd5VWxUOMUvwykTRul8Y
+Authorization: Bearer ${JWT}
 
 {
     "body": "Hello there Hello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello thereHello there"
@@ -21,6 +21,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJjaGlycHktY
 
 POST http://localhost:8080/api/chirps HTTP/1.1
 content-type: application/json
+Authorization: Bearer ${JWT}
 
 {
   "body": "I hear Mastodon is better than Chirpy. sharbert I need to migrate",
@@ -60,12 +61,12 @@ GET http://localhost:8080/api/chirps HTTP/1.1
 ###
 
 POST http://localhost:8080/api/refresh HTTP/1.1
-Authorization: Bearer 
+Authorization: Bearer ${RefreshToken}
 
 ###
 
-PUT http://localhost:8080/api/refresh HTTP/1.1
-Authorization: Bearer 
+PUT http://localhost:8080/api/users HTTP/1.1
+Authorization: Bearer ${JWT}
 
 {
     "email": "new@example.co",
@@ -75,6 +76,18 @@ Authorization: Bearer
 ###
 
 DELETE  http://localhost:8080/api/chirps/{chirpID} HTTP/1.1
-Authorization: Bearer 
+Authorization: Bearer ${JWT}
 
 ###
+
+POST http://localhost:8080/api/polka/webhooks HTTP/1.1
+Authorization: ApiKey 
+
+{
+  "data": {
+    "user_id": "${userID}"
+  },
+  "event": "user.upgraded"
+}
+
+ ###
