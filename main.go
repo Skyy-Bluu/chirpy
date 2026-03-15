@@ -28,6 +28,7 @@ const chirpID = "chirpID"
 const incorrectEmailOrPassword = "Incorrect email or password"
 const sixtyDaysDuration = time.Hour * 24 * 60
 const polkaEventUpgradedUser = "user.upgraded"
+const author_id = "author_id"
 
 var profaneWords = []string{
 	"kerfuffle", "sharbert", "fornax",
@@ -178,7 +179,24 @@ func (cfg *apiConfig) resetDBHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request) {
-	dbChirps, err := cfg.db.GetChirps(req.Context())
+	authorID := req.URL.Query().Get(author_id)
+
+	var dbChirps []database.Chirp
+	var err error
+
+	authorIDParsed, err := uuid.Parse(authorID)
+
+	if err != nil {
+		log.Printf("Error parsing user/author ID: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if authorID == "" {
+		dbChirps, err = cfg.db.GetChirps(req.Context())
+	} else {
+		dbChirps, err = cfg.db.GetChirpsByUserID(req.Context(), authorIDParsed)
+	}
 
 	if err != nil {
 		log.Printf("Error retrieving chirps: %s", err)
